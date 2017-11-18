@@ -1,38 +1,30 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+import datetime
 import lxml.etree
 import sys
 import os
-from collections import defaultdict
+import pandas as pd
 
-scope = ['https://spreadsheets.google.com/feeds']
-credentials = ServiceAccountCredentials.from_json_keyfile_name('My Project-cc4d575f35d9.json', scope)
-gc = gspread.authorize(credentials)
-wks = gc.open("VOCABULARY").sheet1
+# non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd)
+# I suspect this will come up later. Not all characters are handled well.
 
 def main():
-    missing_words = new_words()
+    wks = access_worksheet()
     jmdict_xml, expr = load_jmdict()
-    for word in missing_words.keys():
-        missing_words[word] = [list_trim(extract(word, 'reb'), 8),
-                               list_trim(extract(word, 'gloss'), 3),
-                               list_trim(extract(word, 'pos'), 3),
-                               date = datetime.date.today()]
+    df = get_data(wks, jmdict_xml, expr)
+    update_sheet(df, wks)
 
-def new_words():
-    num_words = len([x for x in wks.col_values(1) if x != '']) + 1
-    missing_words = defaultdict()
 
-    for c in range(2, num_words):
-        if (wks.cell(c, 1).value != "") & (wks.cell(c, 3).value == ""):
-            missing_words[(wks.cell(c, 1).value)] = []
-        else:
-            continue
-        
-    return missing_words
+def access_worksheet():
+    scope = ['https://spreadsheets.google.com/feeds']
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(
+        'C:/Users/Eric/AppData/Local/Programs/Python/Python36/My Project-cc4d575f35d9.json', scope)
+    gc = gspread.authorize(credentials)
+    wks = gc.open("VOCABULARY").sheet1
 
-non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd)
+    return wks
+
 
 def load_jmdict():
     jmdict_filepath = 'C:/Users/Eric/Downloads/JMdict_e/JMdict_e.xml'
@@ -40,26 +32,52 @@ def load_jmdict():
     expr = '//keb[text()="{}"]/../..//{}'
     return jmdict_xml, expr
 
-def extract(key, element):
+
+def extract(jmdict_xml, expr, key, element):
     return [x.text for x in jmdict_xml.xpath(expr.format(key, element))]
+
 
 def list_trim(inputlist, max_length):
     if len(inputlist) > max_length:
-        return [0:max_length]
+        return inputlist[0:max_length]
     else:
         return inputlist
 
-for word in missing_words.keys():
-    missing_words[word] = [list_trim(extract(word, 'reb'), 8),
-                           list_trim(extract(word, 'gloss'), 3),
-                           list_trim(extract(word, 'pos'), 3),
-                           date = datetime.date.today()]
-	
-for w in missing_words:
-    find w in JMdict
-    reading = JMdict value
-    definition = JMdict value
-    pos = JMdict value
-    date = datetime.date.today()
 
-wks.update_cell(10, 10, ['one', 'two'])
+def get_data(worksheet, jmdict_xml, expr):
+    testdf = pd.DataFrame(columns=['row', 'word', 'reading', 'meaning', 'pos', 'date'])
+    rows, missing_words, readings, meanings, pos, dates = [], [], [], [], [], []
+    num_words = len([x for x in worksheet.col_values(1) if x != '']) + 1  # because I don't want to loop the whole sheet...?
+
+    for c in range(2, num_words):
+        if (worksheet.cell(c, 1).value != "") & (worksheet.cell(c, 3).value == ""):
+            rows.append(c)
+            missing_words.append(worksheet.cell(c, 1).value)
+        else:
+            continue
+
+    testdf['row'] = rows
+    testdf['word'] = missing_words
+
+    for word in testdf['word']:
+        readings.append(list_trim(extract(jmdict_xml, expr, word, 'reb'), 8))
+        meanings.append(list_trim(extract(jmdict_xml, expr, word, 'gloss'), 3))
+        pos.append(list_trim(extract(jmdict_xml, expr, word, 'pos'), 3))
+        dates.append(datetime.date.today())
+
+    testdf['reading'] = readings
+    testdf['meaning'] = meanings
+    testdf['pos'] = pos
+    testdf['date'] = dates
+
+    return testdf
+
+def update_sheet(testdf, wks):
+    for i, x in enumerate(testdf['row']):
+        wks.update_cell(x, 3, testdf['reading'][i])
+        wks.update_cell(x, 4, testdf['meaning'][i])
+        wks.update_cell(x, 5, testdf['pos'][i])
+        wks.update_cell(x, 6, testdf['date'][i])
+
+if __name__ == '__main__':
+    main()
