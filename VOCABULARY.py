@@ -11,6 +11,15 @@ credentials = ServiceAccountCredentials.from_json_keyfile_name('My Project-cc4d5
 gc = gspread.authorize(credentials)
 wks = gc.open("VOCABULARY").sheet1
 
+def main():
+    missing_words = new_words()
+    jmdict_xml, expr = load_jmdict()
+    for word in missing_words.keys():
+        missing_words[word] = [list_trim(extract(word, 'reb'), 8),
+                               list_trim(extract(word, 'gloss'), 3),
+                               list_trim(extract(word, 'pos'), 3),
+                               date = datetime.date.today()]
+
 def new_words():
     num_words = len([x for x in wks.col_values(1) if x != '']) + 1
     missing_words = defaultdict()
@@ -39,11 +48,6 @@ def list_trim(inputlist, max_length):
         return [0:max_length]
     else:
         return inputlist
-
-for word in missing_words:
-    print(list_trim(extract(word, 'reb'), 8))
-    print(list_trim(extract(word, 'gloss'), 3))
-    print(list_trim(extract(word, 'pos'), 3))
 
 for word in missing_words.keys():
     missing_words[word] = [list_trim(extract(word, 'reb'), 8),
