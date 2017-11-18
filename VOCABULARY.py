@@ -81,3 +81,6 @@ def update_sheet(testdf, wks):
 
 if __name__ == '__main__':
     main()
+
+def lambda_handler():
+    main()
